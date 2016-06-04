@@ -73,8 +73,8 @@ CREATE TABLE Posts (
    bounty   VARCHAR(8),
    class    INT UNSIGNED REFERENCES Classes(classId),
    postDate DATETIME,
-   helped   BOOLEAN,
-   helpedBy INT UNSIGNED REFERENCES Users(userId),
+   resolved BOOLEAN,
+   tutor    INT UNSIGNED REFERENCES Users(userId),
    deleted  BOOLEAN
 );
 
