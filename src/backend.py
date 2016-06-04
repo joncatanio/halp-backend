@@ -121,7 +121,96 @@ def findUsers(username):
 def findMatchedPosts(token):
    data = {}
 
+@app.route("/posts/<string:username>")
+def UserPosts(username):
+   data = {}
+
+   cur.execute("""\
+      SELECT P.postId, P.user, P.content, P.bounty, P.class, P.postDate, P.resolved, P.tutor, P.deleted
+      FROM USERS U JOIN POSTS P ON P.user = U.userId
+      WHERE U.username = %s""", (username,)
+   );
    
+   row = cur.fetchone()
+   if row is None:
+      return "No data."
+
+   data = json.dumps({'postId':row[0], 'user': row[1], 'content': row[2],
+                     'bounty': row[3], 'class': row[4], 'resolved': row[6], 
+                     'tutor':row[7], 'deleted':row[8]})
+
+   # Clear any excess data.
+   cur.fetchall()
+   return data
+
+@app.route("/pastHalped/<string:username>")
+def UserPastHalped(username):
+   data = {}
+
+   cur.execute("""\
+      SELECT P.postId, P.user, P.content, P.bounty, P.class, P.postDate, P.resolved, P.tutor, P.deleted
+      FROM USERS U JOIN POSTS P ON P.tutor = U.userId
+      WHERE U.username = %s AND P.resolved = TRUE""", (username,)
+      
+   );
+
+   row = cur.fetchone()
+   if row is None:
+      return "No data."
+
+   data = json.dumps({'postId':row[0], 'user': row[1], 'content': row[2],
+                     'bounty': row[3], 'class': row[4], 'resolved': row[6],
+                     'tutor':row[7], 'deleted':row[8]})
+
+   # Clear any excess data.
+   cur.fetchall()
+   return data
+
+@app.route("/currentHalped/<string:username>")
+def UserCurrentHalped(username):
+   data = {}
+
+   cur.execute("""\
+      SELECT P.postId, P.user, P.content, P.bounty, P.class, P.postDate, P.resolved, P.tutor, P.deleted
+      FROM USERS U JOIN POSTS P ON P.tutor = U.userId
+      WHERE U.username = %s AND P.resolved = FALSE""", (username,)
+
+   );
+
+   row = cur.fetchone()
+   if row is None:
+      return "No data."
+
+   data = json.dumps({'postId':row[0], 'user': row[1], 'content': row[2],
+                     'bounty': row[3], 'class': row[4], 'resolved': row[6],
+                     'tutor':row[7], 'deleted':row[8]})
+
+   # Clear any excess data.
+   cur.fetchall()
+   return data
+
+@app.route("/messages/<int:post_Id>")
+def PostMessages(post_Id):
+   data = {}
+
+   cur.execute("""\
+      SELECT P.postId, M.messageId, M.content, M.postDate, M.user
+      FROM PostMessages PM JOIN Posts P ON PM.post = P.postId JOIN Messages M ON PM.message = M.messageId
+      WHERE PM.post = %s""", (str(post_Id),)
+
+   );
+
+   rows = cur.fetchall()
+   if rows is None:
+      return "No data."
+   temp = []
+   
+   for row in rows :
+      temp.append({'postId': row[0], 'messageId':  row[1], 'content':  row[2], 'user': row[4]})
+   data = json.dumps(temp)
+   # Clear any excess data.
+   cur.fetchall()
+   return data
 
 if __name__ == "__main__":
    app.run()
