@@ -15,6 +15,7 @@ db = MySQLdb.connect(host = "localhost",
 cur = db.cursor()
 
 # Helper functions
+# Get the password for <username>.
 def getPassword(username):
    cur.execute("""\
       SELECT password
@@ -22,6 +23,7 @@ def getPassword(username):
       WHERE username = %s""",
       (username,)
    );
+   db.commit()
 
    pw = cur.fetchone()
    if pw is None:
@@ -29,6 +31,40 @@ def getPassword(username):
    cur.fetchall()
 
    return pw[0]
+
+# Purge the preexisting token for <username>.
+def purgeToken(username):
+   cur.execute("""\
+      UPDATE Tokens
+      SET revoked = 1
+      WHERE
+         revoked = 0
+         AND user = (
+               SELECT userId
+               FROM Users
+               WHERE username = %s
+            )""", (username,)
+   );
+
+# Add a token for <username>. 
+def addToken(username, token):
+   print("Adding token: " + token)
+   print("For: " + username)
+   cur.execute("""\
+      INSERT INTO Tokens (
+         user,
+         token,
+         expire,
+         revoked
+      )
+      SELECT
+         userId,
+         %s,
+         NOW() + INTERVAL 15 DAY,
+         0
+      FROM Users
+      WHERE username = %s""", (token, username,)
+   );
 
 # API Routes
 @app.route("/")
@@ -47,6 +83,10 @@ def login():
    # TODO store the new token in the Tokens table and purge the other one if it exists.
    if hashedpw == bcrypt.hashpw(request.form['password'].encode('utf-8'), hashedpw):
       token = '%064x' % random.randrange(16**64)
+      purgeToken(request.form['username'])
+      addToken(request.form['username'], token)
+      db.commit()
+
       data = json.dumps({'token': token})
    else:
       data = "Invalid password."
@@ -63,6 +103,7 @@ def findUsers(username):
       WHERE username = %s""",
       (username,)
    );
+   db.commit()
 
    row = cur.fetchone()
    if row is None:
@@ -75,6 +116,12 @@ def findUsers(username):
    # Clear any excess data. 
    cur.fetchall()
    return data
+
+@app.route("/posts/matched/<string:token>")
+def findMatchedPosts(token):
+   data = {}
+
+   
 
 if __name__ == "__main__":
    app.run()
