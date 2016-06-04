@@ -45,7 +45,7 @@ CREATE TABLE Users (
    firstName       VARCHAR(32),
    lastName        VARCHAR(32),
    username        VARCHAR(32) UNIQUE,
-   email           VARCHAR(128),
+   email           VARCHAR(128) UNIQUE,
    phone           VARCHAR(16),
    bio             VARCHAR(128),
    gender          TINYINT UNSIGNED REFERENCES Genders(genderId),
@@ -92,7 +92,7 @@ CREATE TABLE PostMessages (
 
 CREATE TABLE Tokens (
    `user`  INT UNSIGNED REFERENCES Users(userId),
-   token   CHAR(64), 
+   token   CHAR(64) UNIQUE,
    expire  DATETIME,
    revoked BOOLEAN
 );
