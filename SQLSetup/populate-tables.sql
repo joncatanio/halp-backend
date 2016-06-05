@@ -102,19 +102,29 @@ INSERT INTO Genders VALUES
    (9, 'Other')
 ;
 
+-- Password for joncatanio & kendog is 'password' unhashed on clientside.
 INSERT INTO Users VALUES
-   (NULL, 'Jon', 'Catanio', 'joncatanio', 'joncatanio@gmail.com', '5303566442', 'TA for 357 and other courses!', 1, 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', 1, 2, '4', 1, '2016-06-03 15:28:22', 1, 0),
-   (NULL, 'Test', 'User', 'testman', 'test@test.com', '0000000000', 'Need halp!', 2, 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', 1, 1, '1', 0, '2016-06-03 15:31:53', 1, 0)
+   (NULL, 'Jon', 'Catanio', 'joncatanio', 'joncatanio@gmail.com', '5303566442', 'TA for 357 and other courses!', 1, '$2b$12$gOBCUl821jzRqInQXsvqrOMoRoUc/aP2ewJL84RQrpAT8ZDlyDa3G', 1, 2, '4', 1, '2016-06-03 15:28:22', 1, 0),
+   (NULL, 'Test', 'User', 'testman', 'test@test.com', '0000000000', 'Need halp!', 2, 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', 2, 41, '1', 0, '2016-06-03 15:31:53', 1, 0),
+   (NULL, 'Kendall', 'Gassner', 'kendog', 'kendog@test.com', '0000000000', 'Bi-yooo!', 2, '$2b$12$gOBCUl821jzRqInQXsvqrOMoRoUc/aP2ewJL84RQrpAT8ZDlyDa3G', 1, 2, '4', 1, '2016-06-04 15:26:22', 1, 0)
 ;
 
 INSERT INTO Tutors VALUES
    (1, 3, 'A', 0),
-   (1, 1, 'B+', 0)
+   (1, 1, 'B+', 0),
+   (1, 2, 'A', 0)
 ;
 
 INSERT INTO Posts VALUES
    (NULL, 2, 'Need help with 101, pointers are confusing!', '$15', 1, '2016-06-03 15:43:39', 0, 1, 0),
-   (NULL, 2, 'What is the MVP?', ';)', 2, '2016-06-03 15:51:57', 0, 0, 0)
+   (NULL, 2, 'What is the MVP?', ';)', 2, '2016-06-03 15:51:57', 0, 0, 0),
+   (NULL, 2, 'Halp my grades have fallen and I can\'t get them up', ';)', 2, '2016-06-03 15:51:57', 1, 1, 0),
+   (NULL, 2, 'Random need help yo', 'Monay', 2, '2016-06-03 15:51:57', 0, 0, 0),
+   (NULL, 3, 'Never need help', '$$', 3, '2016-06-03 17:51:57', 1, 1, 0),
+   (NULL, 3, 'Deleted post should not ever show', '$$', 3, '2016-06-03 17:51:57', 1, 1, 1),
+   (NULL, 3, 'Randy post', '$5', 3, '2016-06-02 10:51:57', 0, 0, 0),
+   (NULL, 3, 'This app is cool!', '$5', 3, '2016-06-02 20:51:57', 0, 0, 0),
+   (NULL, 1, 'Also need help with something else bleh', '$60', 3, '2016-06-04 15:51:57', 0, 1, 0)
 ;
 
 INSERT INTO Messages VALUES
@@ -129,8 +139,4 @@ INSERT INTO PostMessages VALUES
    (1, 2),
    (1, 3),
    (1, 4)
-;
-
-INSERT INTO Tokens VALUES
-   (1, 'jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj', '2016-06-16 00:00:00', 0)
 ;
