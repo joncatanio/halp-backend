@@ -104,9 +104,9 @@ INSERT INTO Genders VALUES
 
 -- Password for joncatanio & kendog is 'password' unhashed on clientside.
 INSERT INTO Users VALUES
-   (NULL, 'Jon', 'Catanio', 'joncatanio', 'joncatanio@gmail.com', '5303566442', 'TA for 357 and other courses!', 1, '$2b$12$gOBCUl821jzRqInQXsvqrOMoRoUc/aP2ewJL84RQrpAT8ZDlyDa3G', 1, 2, '4', 1, '2016-06-03 15:28:22', 1, 0),
-   (NULL, 'Test', 'User', 'testman', 'test@test.com', '0000000000', 'Need halp!', 2, 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', 2, 41, '1', 0, '2016-06-03 15:31:53', 1, 0),
-   (NULL, 'Kendall', 'Gassner', 'kendog', 'kendog@test.com', '0000000000', 'Bi-yooo!', 2, '$2b$12$gOBCUl821jzRqInQXsvqrOMoRoUc/aP2ewJL84RQrpAT8ZDlyDa3G', 1, 2, '4', 1, '2016-06-04 15:26:22', 1, 0)
+   (NULL, 'Jon', 'Catanio', 'joncatanio', 'joncatanio@gmail.com', '5303566442', 'TA for 357 and other courses!', '1995-06-16', 1, '$2b$12$gOBCUl821jzRqInQXsvqrOMoRoUc/aP2ewJL84RQrpAT8ZDlyDa3G', 1, 2, '4', 1, '2016-06-03 15:28:22', 1, 0),
+   (NULL, 'Test', 'User', 'testman', 'test@test.com', '0000000000', 'Need halp!', '1995-08-31', 2, 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', 2, 41, '1', 0, '2016-06-03 15:31:53', 1, 0),
+   (NULL, 'Kendall', 'Gassner', 'kendog', 'kendog@test.com', '0000000000', 'Bi-yooo!', '1996-01-15', 2, '$2b$12$gOBCUl821jzRqInQXsvqrOMoRoUc/aP2ewJL84RQrpAT8ZDlyDa3G', 1, 2, '4', 1, '2016-06-04 15:26:22', 1, 0)
 ;
 
 INSERT INTO Tutors VALUES

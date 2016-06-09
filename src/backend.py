@@ -1,8 +1,11 @@
 import MySQLdb
+from _mysql_exceptions import MySQLError, IntegrityError
 import bcrypt
 import json
 import random
 import datetime
+import smtplib
+from email.mime.text import MIMEText
 from flask import Flask, request
 
 # Create the app. 
@@ -15,68 +18,108 @@ db = MySQLdb.connect(host = "localhost",
                      db = "HalpTest")
 cur = db.cursor()
 
+# TODO Break out into multiple packages, create custom module.
+# Custom Exceptions
+class EmailError(Exception):
+   def __init__(self, value):
+      self.value = value
+   def __str__(self):
+      return repr(self.value)
+
 # Helper functions
+# Returns a True or False value if an account has been verified by email.
+def validAccount(username):
+   try:
+      cur.execute("""\
+         SELECT verifiedAccount
+         FROM Users
+         WHERE username = %s""", (username,)
+      )
+      db.commit()
+   except MySQLError:
+      raise
+   
+   row = cur.fetchone()
+   if row is None or row[0] == 0:
+      return False
+
+   cur.fetchall()
+   return True
+
 # Get the password for <username>.
 def getPassword(username):
-   cur.execute("""\
-      SELECT password
-      FROM Users
-      WHERE username = %s""",
-      (username,)
-   );
-   db.commit()
+   try:
+      cur.execute("""\
+         SELECT password
+         FROM Users
+         WHERE username = %s""", (username,)
+      )
+      db.commit()
+   except MySQLError:
+      raise
 
    pw = cur.fetchone()
    if pw is None:
       return None
-   cur.fetchall()
 
+   cur.fetchall()
    return pw[0]
 
 # Purge the preexisting token for <username>. 
 # purgeToken and addToken are committed together.
 def purgeToken(username):
-   cur.execute("""\
-      UPDATE Tokens
-      SET revoked = 1
-      WHERE
-         revoked = 0
-         AND user = (
-               SELECT userId
-               FROM Users
-               WHERE username = %s
-            )""", (username,)
-   );
+   try:
+      cur.execute("""\
+         UPDATE Tokens
+         SET revoked = 1
+         WHERE
+            revoked = 0
+            AND user = (
+                  SELECT userId
+                  FROM Users
+                  WHERE username = %s
+               )""", (username,)
+      )
+   except MySQLError:
+      raise
 
 # Add a token for <username>. 
 def addToken(username, token):
-   cur.execute("""\
-      INSERT INTO Tokens (
-         user,
-         token,
-         expire,
-         revoked
+   try:
+      cur.execute("""\
+         INSERT INTO Tokens (
+            user,
+            token,
+            expire,
+            revoked
+         )
+         SELECT
+            userId,
+            %s,
+            NOW() + INTERVAL 15 DAY,
+            0
+         FROM Users
+         WHERE username = %s""", (token, username,)
       )
-      SELECT
-         userId,
-         %s,
-         NOW() + INTERVAL 15 DAY,
-         0
-      FROM Users
-      WHERE username = %s""", (token, username,)
-   );
+   except IntegrityError:
+      raise
+   except MySQLError:
+      raise
 
 # Validates a token. Returns true if token is valid and false otherwise.
 def validateToken(token):
-   cur.execute("""\
-      SELECT
-         revoked,
-         TIMESTAMPDIFF(SECOND, NOW(), expire)
-      FROM Tokens
-      WHERE token = %s""", (token,)
-   );
-   db.commit()
-   
+   try:
+      cur.execute("""\
+         SELECT
+            revoked,
+            TIMESTAMPDIFF(SECOND, NOW(), expire)
+         FROM Tokens
+         WHERE token = %s""", (token,)
+      )
+      db.commit()
+   except MySQLError:
+      raise
+
    row = cur.fetchone()
    if row is None or row[0] == 1 or row[1] <= 0:
       return False
@@ -84,64 +127,195 @@ def validateToken(token):
    cur.fetchall()
    return True
 
+# Generates a random token represented as a 64 character hexidecimal string. 
+def generateToken():
+   return '%064x' % random.randrange(16**64)
+
+# Forms and sends an email to verify a users account.
+# Returns
+def sendEmailVerification(email, name, token):
+   try:
+      content = "Please click the link below to verify your account\n" +\
+                "http://localhost:5000/verify/" + token
+      msg = MIMEText(content, 'plain')
+      msg['From'] = "noreply <noreply@joncatanio.com>"
+      msg['To'] = name + " <" + email + ">"
+      msg['Subject'] = "Verify Halp Account"
+
+      server = smtplib.SMTP('mail.joncatanio.com', 26)
+      server.starttls()
+      server.login('noreply@joncatanio.com', '[emailnoreplyaccount616]')
+      server.sendmail("noreply@joncatanio.com", email, msg.as_string())
+      server.quit()
+   except Exception:
+      raise EmailError('')
+ 
 # API Routes
 @app.route("/")
 def main():
    return "Welcome to Halp!"
 
-@app.route("/login", methods=['POST'])
+@app.route("/register", methods = ['POST'])
+def register():
+   response = {}
+   hashedpw = bcrypt.hashpw(request.form['password'].encode('utf-8'), bcrypt.gensalt())
+   
+   try:
+      cur.execute("""\
+         INSERT INTO Users VALUES
+            (NULL, %s, %s, %s, %s, NULL, NULL, NULL, NULL, %s, %s, %s, NULL, 0, NOW(), 0, 0)""",
+         (request.form['firstName'], request.form['lastName'], request.form['username'],
+         request.form['email'], hashedpw, request.form['schoolId'],
+         request.form['majorId'],)
+      );
+   except IntegrityError:
+      response['message'] = 'Username or email already taken.'
+      response['status_code'] = 400
+      return json.dumps(response)
+   except MySQLError:
+      response['message'] = 'Internal Server Error.'
+      response['status_code'] = 500
+      return json.dumps(response)
+
+   try:
+      token = generateToken()
+      addToken(request.form['username'], token)
+   except IntegrityError:
+      response['message'] = 'Duplicate token.'
+      response['status_code'] = 500
+      return json.dumps(response)
+   except MySQLError:
+      response['message'] = 'Internal Server Error.'
+      response['status_code'] = 500
+      return json.dumps(response)
+  
+   try:
+      sendEmailVerification(request.form['email'], request.form['firstName'] + ' ' +
+                            request.form['lastName'], token)
+   except EmailError:
+      response['message'] = 'Email verification error.'
+      response['status_code'] = 500
+      return json.dumps(response)
+      
+   # Commit Users and Tokens table updates.
+   db.commit()
+
+   response['message'] = "OK. Pending token validation."
+   response['status_code'] = 201
+   return json.dumps(response)
+
+@app.route("/verify/<string:token>")
+def verify(token):
+   response = {}
+   
+   try: 
+      if validateToken(token) == False:
+         response['message'] = "Bad token."
+         response['status_code'] = 401
+         return json.dumps(response)
+
+      cur.execute("""\
+         UPDATE 
+            Users AS U
+            INNER JOIN Tokens AS T ON U.userId = T.user 
+         SET
+            verifiedAccount = 1
+         WHERE token = %s""", (token,)
+      )
+      db.commit()
+   except MySQLError:
+      response['message'] = 'Internal Server Error.'
+      response['status_code'] = 500
+      return json.dumps(response)
+
+   response['message'] = "verified"
+   response['status_code'] = 200
+   return json.dumps(response)
+
+@app.route("/login", methods = ['POST'])
 def login():
    data = {}
-   hashedpw = getPassword(request.form['username'])
+   response = {}
 
-   if hashedpw is None:
-      return "Invalid username."
-   hashedpw = hashedpw.encode('utf-8')
+   try:
+      hashedpw = getPassword(request.form['username'])
+      if hashedpw is None:
+         response['message'] = 'Invalid username.'
+         response['status_code'] = 401
+         return json.dumps(response) 
+      hashedpw = hashedpw.encode('utf-8')
 
-   if hashedpw == bcrypt.hashpw(request.form['password'].encode('utf-8'), hashedpw):
-      token = '%064x' % random.randrange(16**64)
-      purgeToken(request.form['username'])
-      addToken(request.form['username'], token)
-      db.commit()
+      if not validAccount(request.form['username']):
+         response['message'] = 'Account not verified.'
+         response['status_code'] = 401
+         return json.dumps(response) 
 
-      data = json.dumps({'token': token})
-   else:
-      data = "Invalid password."
+      if hashedpw == bcrypt.hashpw(request.form['password'].encode('utf-8'), hashedpw):
+         token = generateToken()
+         purgeToken(request.form['username'])
+         addToken(request.form['username'], token)
+         db.commit()
 
-   return data
+         data['token'] = token
+      else:
+         response['message'] = 'Invalid password.'
+         response['status_code'] = 401
+         return json.dumps(response) 
+   except IntegrityError:
+      response['message'] = 'Duplicate token.'
+      response['status_code'] = 500
+      return json.dumps()
+   except MySQLError:
+      response['message'] = 'Internal Server Error.'
+      response['status_code'] = 500
+      return json.dumps(response)
 
-@app.route("/user/<string:token>")
-def getUser(token):
+   return json.dumps(data) 
+
+@app.route("/user/")
+def getUser():
    data = {}
+   response = {}
    
-   cur.execute("""\
-      SELECT
-         U.userId,
-         U.firstName,
-         U.lastName,
-         U.username,
-         U.email,
-         U.phone,
-         U.bio,
-         G.description,
-         U.school,
-         U.major,
-         U.year,
-         U.verifiedTutor,
-         S.name,
-         M.name,
-         M.abbreviation
-      FROM
-         Tokens AS T
-         INNER JOIN Users AS U ON T.user = U.userId
-         INNER JOIN Genders AS G ON U.gender = G.genderId
-         INNER JOIN Schools AS S ON U.school = S.schoolId
-         INNER JOIN Majors AS M ON U.major = M.majorId
-      WHERE
-         T.token = %s
-         AND U.deleted = FALSE""", (token,)
-   );
-   db.commit()
+   try:
+      if validateToken(request.headers['authentication']) == False:
+         response['message'] = "Bad token."
+         response['status_code'] = 403
+         return json.dumps(response)
+
+      cur.execute("""\
+         SELECT
+            U.userId,
+            U.firstName,
+            U.lastName,
+            U.username,
+            U.email,
+            U.phone,
+            U.dateOfBirth,
+            U.bio,
+            G.description,
+            U.school,
+            U.major,
+            U.year,
+            U.verifiedTutor,
+            S.name,
+            M.name,
+            M.abbreviation
+         FROM
+            Tokens AS T
+            INNER JOIN Users AS U ON T.user = U.userId
+            INNER JOIN Genders AS G ON U.gender = G.genderId
+            INNER JOIN Schools AS S ON U.school = S.schoolId
+            INNER JOIN Majors AS M ON U.major = M.majorId
+         WHERE
+            T.token = %s
+            AND U.deleted = FALSE""", (request.headers['authentication'],)
+      )
+      db.commit()
+   except MySQLError:
+      response['message'] = 'Internal Server Error.'
+      response['status_code'] = 500
+      return json.dumps(response)
 
    row = cur.fetchone()
    if row is None:
@@ -153,58 +327,67 @@ def getUser(token):
    data['username'] = row[3]
    data['email'] = row[4]
    data['phone'] = row[5]
-   data['bio'] = row[6]
-   data['gender'] = row[7]
-   data['schoolId'] = row[8]
-   data['majorId'] = row[9]
-   data['year'] = row[10]
-   data['verifiedTutor'] = row[11]
-   data['school'] = row[12]
-   data['major'] = row[13]
-   data['majorAbbreviation'] = row[14]
+   data['birthday'] = row[6].isoformat()
+   data['bio'] = row[7]
+   data['gender'] = row[8]
+   data['schoolId'] = row[9]
+   data['majorId'] = row[10]
+   data['year'] = row[11]
+   data['verifiedTutor'] = row[12]
+   data['school'] = row[13]
+   data['major'] = row[14]
+   data['majorAbbreviation'] = row[15]
    data = json.dumps(data)
    
    # Clear any excess data. 
    cur.fetchall()
    return data
 
-@app.route("/posts/matched/<string:token>")
-def getMatchedPosts(token):
+@app.route("/posts/matched/")
+def getMatchedPosts():
    data = []
+   response = {}
    
-   if validateToken(token) == False:
-      return "Bad token."
+   try:
+      if validateToken(request.headers['authentication']) == False:
+         response['message'] = "Bad token."
+         response['status_code'] = 403
+         return json.dumps(response)
 
-   cur.execute("""\
-      SELECT
-         P.postId,
-         PostUser.username,
-         P.content,
-         P.bounty,
-         P.class,
-         P.postDate
-      FROM
-         Tokens AS T
-         INNER JOIN Users AS ThisUser ON T.user = ThisUser.userId
-         INNER JOIN Posts AS P
-         INNER JOIN Users AS PostUser ON P.user = PostUser.userId
-      WHERE
-         T.token = %s
-         AND P.class IN (
-               SELECT class
-               FROM
-                  Tutors AS T
-                  INNER JOIN Tokens AS TOK ON T.user = TOK.user
-               WHERE
-                  TOK.token = %s
-                  AND T.unlisted = FALSE
-            )
-         AND PostUser.school = ThisUser.school
-         AND P.resolved = FALSE
-         AND P.deleted = FALSE
-         AND (P.tutor IS NULL OR P.tutor = 0)""", (token, token,)
-   );
-   db.commit()
+      cur.execute("""\
+         SELECT
+            P.postId,
+            PostUser.username,
+            P.content,
+            P.bounty,
+            P.class,
+            P.postDate
+         FROM
+            Tokens AS T
+            INNER JOIN Users AS ThisUser ON T.user = ThisUser.userId
+            INNER JOIN Posts AS P
+            INNER JOIN Users AS PostUser ON P.user = PostUser.userId
+         WHERE
+            T.token = %s
+            AND P.class IN (
+                  SELECT class
+                  FROM
+                     Tutors AS T
+                     INNER JOIN Tokens AS TOK ON T.user = TOK.user
+                  WHERE
+                     TOK.token = %s
+                     AND T.unlisted = FALSE
+               )
+            AND PostUser.school = ThisUser.school
+            AND P.resolved = FALSE
+            AND P.deleted = FALSE
+            AND (P.tutor IS NULL OR P.tutor = 0)""",
+      (request.headers['authentication'], request.headers['authentication'],));
+      db.commit()
+   except MySQLError:
+      response['message'] = 'Internal Server Error.'
+      response['status_code'] = 500
+      return json.dumps(response)
    
    rows = cur.fetchall()
    if rows is None:
@@ -222,30 +405,38 @@ def getMatchedPosts(token):
 
    return json.dumps(data)
 
-@app.route("/posts/<string:token>")
-def getUserPosts(token):
+@app.route("/posts/")
+def getUserPosts():
    data = []
+   response = {}
 
-   if validateToken(token) == False:
-      return "Bad token."
+   try:
+      if validateToken(request.headers['authentication']) == False:
+         response['message'] = "Bad token."
+         response['status_code'] = 403
+         return json.dumps(response)
 
-   cur.execute("""\
-      SELECT
-         P.postId,
-         P.content,
-         P.bounty,
-         P.class,
-         P.postDate,
-         P.tutor
-      FROM 
-         Tokens AS T
-         INNER JOIN Posts AS P ON T.user = P.user
-      WHERE
-         T.token = %s
-         AND P.deleted <> 1
-         AND P.resolved <> 1""", (token,)
-   );
-   db.commit()
+      cur.execute("""\
+         SELECT
+            P.postId,
+            P.content,
+            P.bounty,
+            P.class,
+            P.postDate,
+            P.tutor
+         FROM 
+            Tokens AS T
+            INNER JOIN Posts AS P ON T.user = P.user
+         WHERE
+            T.token = %s
+            AND P.deleted <> 1
+            AND P.resolved <> 1""", (request.headers['authentication'],)
+      );
+      db.commit()
+   except MySQLError:
+      response['message'] = 'Internal Server Error.'
+      response['status_code'] = 500
+      return json.dumps(response)
    
    rows = cur.fetchall()
    if rows is None:
@@ -263,33 +454,41 @@ def getUserPosts(token):
 
    return json.dumps(data)
 
-@app.route("/posts/helped/<string:token>")
-def getUserHelpedPosts(token):
+@app.route("/posts/helped/")
+def getUserHelpedPosts():
    data = []
+   response = {}
 
-   if validateToken(token) == False:
-      return "Bad token."
+   try:
+      if validateToken(request.headers['authentication']) == False:
+         response['message'] = "Bad token."
+         response['status_code'] = 403
+         return json.dumps(response)
 
-   cur.execute("""\
-      SELECT
-         P.postId,
-         P.content,
-         P.bounty,
-         P.postDate,
-         P.class,
-         HelpedUser.username
-      FROM
-         Tokens AS T
-         INNER Join Users AS ThisUser ON T.user = ThisUser.userId
-         INNER JOIN Posts AS P ON ThisUser.userId = P.tutor
-         INNER JOIN Users AS HelpedUser ON P.user = HelpedUser.userId
-      WHERE
-         T.token = %s
-         AND P.user <> P.tutor
-         AND P.resolved = TRUE
-         AND P.deleted = FALSE""", (token,)
-   );
-   db.commit()
+      cur.execute("""\
+         SELECT
+            P.postId,
+            P.content,
+            P.bounty,
+            P.postDate,
+            P.class,
+            HelpedUser.username
+         FROM
+            Tokens AS T
+            INNER Join Users AS ThisUser ON T.user = ThisUser.userId
+            INNER JOIN Posts AS P ON ThisUser.userId = P.tutor
+            INNER JOIN Users AS HelpedUser ON P.user = HelpedUser.userId
+         WHERE
+            T.token = %s
+            AND P.user <> P.tutor
+            AND P.resolved = TRUE
+            AND P.deleted = FALSE""", (request.headers['authentication'],)
+      );
+      db.commit()
+   except MySQLError:
+      response['message'] = 'Internal Server Error.'
+      response['status_code'] = 500
+      return json.dumps(response)
 
    rows = cur.fetchall()
    if rows is None:
@@ -308,33 +507,41 @@ def getUserHelpedPosts(token):
    return json.dumps(data)
 
 # Any way to optimize?
-@app.route("/posts/helping/<string:token>")
-def getUserHelpingPosts(token):
+@app.route("/posts/helping/")
+def getUserHelpingPosts():
    data = []
+   response = {}
 
-   if validateToken(token) == False:
-      return "Bad token."
+   try:
+      if validateToken(request.headers['authentication']) == False:
+         response['message'] = "Bad token."
+         response['status_code'] = 403
+         return json.dumps(response)
 
-   cur.execute("""\
-      SELECT
-         P.postId,
-         P.content,
-         P.bounty,
-         P.postDate,
-         P.class,
-         HelpedUser.username
-      FROM
-         Tokens AS T
-         INNER Join Users AS ThisUser ON T.user = ThisUser.userId
-         INNER JOIN Posts AS P ON ThisUser.userId = P.tutor
-         INNER JOIN Users AS HelpedUser ON P.user = HelpedUser.userId
-      WHERE
-         T.token = %s
-         AND P.user <> P.tutor
-         AND P.resolved = FALSE
-         AND P.deleted = FALSE""", (token,)
-   );
-   db.commit()
+      cur.execute("""\
+         SELECT
+            P.postId,
+            P.content,
+            P.bounty,
+            P.postDate,
+            P.class,
+            HelpedUser.username
+         FROM
+            Tokens AS T
+            INNER Join Users AS ThisUser ON T.user = ThisUser.userId
+            INNER JOIN Posts AS P ON ThisUser.userId = P.tutor
+            INNER JOIN Users AS HelpedUser ON P.user = HelpedUser.userId
+         WHERE
+            T.token = %s
+            AND P.user <> P.tutor
+            AND P.resolved = FALSE
+            AND P.deleted = FALSE""", (request.headers['authentication'],)
+      );
+      db.commit()
+   except MySQLError:
+      response['message'] = 'Internal Server Error.'
+      response['status_code'] = 500
+      return json.dumps(response)
 
    rows = cur.fetchall()
    if rows is None:
@@ -355,29 +562,35 @@ def getUserHelpingPosts(token):
 @app.route("/class/<int:classId>")
 def getClass(classId):
    data = {}
+   response = {}
    
-   cur.execute("""\
-      SELECT
-         C.info,
-         CN.abbreviation,
-         CN.name,
-         S.name,
-         S.schoolId,
-         M.name,
-         M.abbreviation,
-         COL.name
-      FROM
-         Classes AS C
-         INNER JOIN ClassNames AS CN ON C.classId = CN.class
-         INNER JOIN Schools AS S ON C.school = S.schoolId
-         INNER JOIN Majors AS M ON CN.major = M.majorId
-         INNER JOIN Colleges AS COL ON M.college = COL.collegeId
-      WHERE
-         C.classId = %s
-         AND C.deleted = FALSE
-         AND CN.unlisted = FALSE""", (classId,)
-   );
-   db.commit()
+   try:
+      cur.execute("""\
+         SELECT
+            C.info,
+            CN.abbreviation,
+            CN.name,
+            S.name,
+            S.schoolId,
+            M.name,
+            M.abbreviation,
+            COL.name
+         FROM
+            Classes AS C
+            INNER JOIN ClassNames AS CN ON C.classId = CN.class
+            INNER JOIN Schools AS S ON C.school = S.schoolId
+            INNER JOIN Majors AS M ON CN.major = M.majorId
+            INNER JOIN Colleges AS COL ON M.college = COL.collegeId
+         WHERE
+            C.classId = %s
+            AND C.deleted = FALSE
+            AND CN.unlisted = FALSE""", (classId,)
+      );
+      db.commit()
+   except MySQLError:
+      response['message'] = 'Internal Server Error.'
+      response['status_code'] = 500
+      return json.dumps(response)
 
    rows = cur.fetchall()
    if rows is None:
@@ -404,26 +617,29 @@ def getClass(classId):
 
    return json.dumps(data)
 
-# TODO Question for Eriq: How do should I split up routes with different params?
-# I want to also have an endpoint that gets classes per major. Or should I leave
-# that up to the front end devs? 
 @app.route("/classes/<int:schoolId>")
 def getClasses(schoolId):
    data = []
+   response = {}
 
-   cur.execute("""\
-      SELECT
-         C.classId,
-         C.info,
-         S.name,
-         S.schoolId
-      FROM
-         Classes AS C
-         INNER JOIN Schools AS S ON C.school = S.schoolId
-      WHERE
-         C.school = %s
-         AND C.deleted = FALSE""", (schoolId,)
-   );
+   try:
+      cur.execute("""\
+         SELECT
+            C.classId,
+            C.info,
+            S.name,
+            S.schoolId
+         FROM
+            Classes AS C
+            INNER JOIN Schools AS S ON C.school = S.schoolId
+         WHERE
+            C.school = %s
+            AND C.deleted = FALSE""", (schoolId,)
+      )
+   except MySQLError:
+      response['message'] = 'Internal Server Error.'
+      response['status_code'] = 500
+      return json.dumps(response)
 
    rows = cur.fetchall()
    if rows is None:
@@ -437,24 +653,29 @@ def getClasses(schoolId):
       obj['schoolName'] = row[2]
       obj['schoolId'] = row[2]
 
-      cur.execute("""\
-         SELECT
-            CN.abbreviation,
-            CN.name,
-            M.name,
-            M.abbreviation,
-            COL.name
-         FROM
-            Classes AS C
-            INNER JOIN ClassNames AS CN ON C.classId = CN.class
-            INNER JOIN Schools AS S ON C.school = S.schoolId
-            INNER JOIN Majors AS M ON CN.major = M.majorId
-            INNER JOIN Colleges AS COL ON M.college = COL.collegeId
-         WHERE
-            C.classId = %s
-            AND C.deleted = FALSE
-            AND CN.unlisted = FALSE""", (row[0],)
-      )
+      try:
+         cur.execute("""\
+            SELECT
+               CN.abbreviation,
+               CN.name,
+               M.name,
+               M.abbreviation,
+               COL.name
+            FROM
+               Classes AS C
+               INNER JOIN ClassNames AS CN ON C.classId = CN.class
+               INNER JOIN Schools AS S ON C.school = S.schoolId
+               INNER JOIN Majors AS M ON CN.major = M.majorId
+               INNER JOIN Colleges AS COL ON M.college = COL.collegeId
+            WHERE
+               C.classId = %s
+               AND C.deleted = FALSE
+               AND CN.unlisted = FALSE""", (row[0],)
+         )
+      except MySQLError:
+         response['message'] = 'Internal Server Error.'
+         response['status_code'] = 500
+         return json.dumps(response)
 
       innerRows = cur.fetchall()
       if rows is not None:
@@ -475,28 +696,69 @@ def getClasses(schoolId):
 
    return json.dumps(data)
 
-@app.route("/messages/<int:post_Id>")
-def PostMessages(post_Id):
-   data = {}
+@app.route("/messages/<int:postId>")
+def PostMessages(postId):
+   data = []
+   response = {}
 
-   cur.execute("""\
-      SELECT P.postId, M.messageId, M.content, M.postDate, M.user
-      FROM PostMessages PM JOIN Posts P ON PM.post = P.postId JOIN Messages M ON PM.message = M.messageId
-      WHERE PM.post = %s""", (str(post_Id),)
+   try:
+      if validateToken(request.headers['authentication']) == False:
+         response['message'] = "Bad token."
+         response['status_code'] = 403
+         return json.dumps(response)
 
-   );
+      cur.execute("""\
+         SELECT %s
+         IN (
+            SELECT token
+            FROM
+               PostMessages AS PM
+               INNER JOIN Messages AS M ON PM.message = M.messageId
+               INNER JOIN Users AS U ON M.user = U.userId
+               INNER JOIN Tokens AS T ON U.userId = T.user
+            WHERE
+               PM.post = %s
+         )""", (request.headers['authentication'], postId)
+      )
+
+      cur.execute("""\
+         SELECT
+            P.postId,
+            M.messageId,
+            M.content,
+            M.postDate,
+            U.username,
+            U.firstName,
+            U.lastName
+         FROM 
+            PostMessages AS PM 
+            INNER JOIN Posts P ON PM.post = P.postId
+            INNER JOIN Messages M ON PM.message = M.messageId
+            INNER JOIN Users AS U ON M.user = U.userId
+         WHERE PM.post = %s""", (postId,)
+      )
+   except MySQLError:
+      response['message'] = 'Internal Server Error.'
+      response['status_code'] = 500
+      return json.dumps(response)
 
    rows = cur.fetchall()
    if rows is None:
       return "No data."
-   temp = []
    
    for row in rows :
-      temp.append({'postId': row[0], 'messageId':  row[1], 'content':  row[2], 'user': row[4]})
-   data = json.dumps(temp)
-   # Clear any excess data.
-   cur.fetchall()
-   return data
+      obj = {}
+      obj['postId'] = row[0]
+      obj['messageId'] = row[1]
+      obj['content'] = row[2]
+      obj['postDate'] = row[3].isoformat()
+      obj['username'] = row[4]
+      obj['firstName'] = row[5]
+      obj['lastName'] = row[6]
+      data.append(obj)
+
+   return json.dumps(data)
 
 if __name__ == "__main__":
+   app.debug = True
    app.run()

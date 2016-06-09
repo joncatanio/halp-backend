@@ -47,6 +47,7 @@ CREATE TABLE Users (
    username        VARCHAR(32) UNIQUE,
    email           VARCHAR(128) UNIQUE,
    phone           VARCHAR(16),
+   dateOfBirth     DATE,
    bio             VARCHAR(128),
    gender          TINYINT UNSIGNED REFERENCES Genders(genderId),
    password        CHAR(60),
@@ -96,3 +97,5 @@ CREATE TABLE Tokens (
    expire  DATETIME,
    revoked BOOLEAN
 );
+
+CREATE INDEX TokenIndex ON Tokens(token, `user`);
