@@ -46,6 +46,27 @@ def validAccount(username):
    cur.fetchall()
    return True
 
+# Same as validAccount() but verifies with a token.
+def validAccountT(token):
+   try:
+      cur.execute("""\
+         SELECT verifiedAccount
+         FROM
+            Users AS U
+            INNER JOIN Tokens AS T ON U.userId = T.user
+         WHERE token = %s""", (token,)
+      )
+      db.commit()
+   except MySQLError:
+      raise
+   
+   row = cur.fetchone()
+   if row is None or row[0] == 0:
+      return False
+
+   cur.fetchall()
+   return True
+
 # Get the password for <username>.
 def getPassword(username):
    try:
@@ -53,6 +74,27 @@ def getPassword(username):
          SELECT password
          FROM Users
          WHERE username = %s""", (username,)
+      )
+      db.commit()
+   except MySQLError:
+      raise
+
+   pw = cur.fetchone()
+   if pw is None:
+      return None
+
+   cur.fetchall()
+   return pw[0]
+
+# Get the password for the user with token: <token>
+def getPasswordT(token):
+   try:
+      cur.execute("""\
+         SELECT password
+         FROM
+            Users AS U
+            INNER JOIN Tokens AS T ON U.userId = T.user
+         WHERE token = %s""", (token,)
       )
       db.commit()
    except MySQLError:
@@ -210,7 +252,7 @@ def verify(token):
    
    try: 
       if validateToken(token) == False:
-         response['message'] = "Bad token."
+         response['message'] = "Invalid token."
          response['status_code'] = 401
          return json.dumps(response)
 
@@ -272,76 +314,216 @@ def login():
 
    return json.dumps(data) 
 
-@app.route("/user/")
-def getUser():
+@app.route("/profile/", methods = ['GET', 'POST'])
+def profile():
    data = {}
    response = {}
-   
+
    try:
       if validateToken(request.headers['authentication']) == False:
-         response['message'] = "Bad token."
+         response['message'] = "Invalid token."
          response['status_code'] = 403
          return json.dumps(response)
 
-      cur.execute("""\
-         SELECT
-            U.userId,
-            U.firstName,
-            U.lastName,
-            U.username,
-            U.email,
-            U.phone,
-            U.dateOfBirth,
-            U.bio,
-            G.description,
-            U.school,
-            U.major,
-            U.year,
-            U.verifiedTutor,
-            S.name,
-            M.name,
-            M.abbreviation
-         FROM
-            Tokens AS T
-            INNER JOIN Users AS U ON T.user = U.userId
-            INNER JOIN Genders AS G ON U.gender = G.genderId
-            INNER JOIN Schools AS S ON U.school = S.schoolId
-            INNER JOIN Majors AS M ON U.major = M.majorId
-         WHERE
-            T.token = %s
-            AND U.deleted = FALSE""", (request.headers['authentication'],)
-      )
-      db.commit()
+      if not validAccountT(request.headers['authentication']):
+         response['message'] = 'Account not verified.'
+         response['status_code'] = 401
+         return json.dumps(response) 
    except MySQLError:
       response['message'] = 'Internal Server Error.'
       response['status_code'] = 500
       return json.dumps(response)
+      
+   if request.method == 'POST':
+      try:
+         cur.execute("""\
+            UPDATE
+               Users AS U
+               INNER JOIN Tokens AS T ON U.userId = T.user
+            SET
+               U.firstName = %s,
+               U.lastName = %s,
+               U.dateOfBirth = %s,
+               U.bio = %s,
+               U.gender = %s,
+               U.school = %s,
+               U.major = %s,
+               U.year = %s
+            WHERE
+               T.token = %s""",
+            (request.form['firstName'], request.form['lastName'],
+            request.form['dateOfBirth'], request.form['bio'],
+            request.form['gender'], request.form['school'],
+            request.form['major'], request.form['year'],
+            request.headers['authentication'],)
+         )
+         db.commit()
+         
+         response['message'] = 'OK.'
+         response['status_code'] = 200
+         return json.dumps(response)
+      except MySQLError:
+         response['message'] = 'Internal Server Error.'
+         response['status_code'] = 500
+         return json.dumps(response)
+   elif request.method == 'GET':
+      try:
+         cur.execute("""\
+            SELECT
+               U.userId,
+               U.firstName,
+               U.lastName,
+               U.username,
+               U.dateOfBirth,
+               U.bio,
+               G.description,
+               U.school,
+               U.major,
+               U.year,
+               U.verifiedTutor,
+               S.name,
+               M.name,
+               M.abbreviation
+            FROM
+               Tokens AS T
+               INNER JOIN Users AS U ON T.user = U.userId
+               INNER JOIN Genders AS G ON U.gender = G.genderId
+               INNER JOIN Schools AS S ON U.school = S.schoolId
+               INNER JOIN Majors AS M ON U.major = M.majorId
+            WHERE
+               T.token = %s
+               AND U.deleted = FALSE""", (request.headers['authentication'],)
+         )
+      except MySQLError:
+         response['message'] = 'Internal Server Error.'
+         response['status_code'] = 500
+         return json.dumps(response)
 
-   row = cur.fetchone()
-   if row is None:
-      return "No data."
+      row = cur.fetchone()
+      if row is None:
+         return "No data."
 
-   data['userId'] = row[0]
-   data['firstName'] = row[1]
-   data['lastName'] = row[2]
-   data['username'] = row[3]
-   data['email'] = row[4]
-   data['phone'] = row[5]
-   data['birthday'] = row[6].isoformat()
-   data['bio'] = row[7]
-   data['gender'] = row[8]
-   data['schoolId'] = row[9]
-   data['majorId'] = row[10]
-   data['year'] = row[11]
-   data['verifiedTutor'] = row[12]
-   data['school'] = row[13]
-   data['major'] = row[14]
-   data['majorAbbreviation'] = row[15]
-   data = json.dumps(data)
-   
-   # Clear any excess data. 
-   cur.fetchall()
-   return data
+      data['userId'] = row[0]
+      data['firstName'] = row[1]
+      data['lastName'] = row[2]
+      data['username'] = row[3]
+      data['birthday'] = row[4].isoformat()
+      data['bio'] = row[5]
+      data['gender'] = row[6]
+      data['schoolId'] = row[7]
+      data['majorId'] = row[8]
+      data['year'] = row[9]
+      data['verifiedTutor'] = row[10]
+      data['school'] = row[11]
+      data['major'] = row[12]
+      data['majorAbbreviation'] = row[13]
+      
+      # Clear any excess data. 
+      cur.fetchall()
+
+   db.commit()
+   return json.dumps(data)
+
+@app.route("/account/", methods = ['GET', 'POST'])
+def account():
+   data = {}
+   response = {}
+
+   try:
+      if validateToken(request.headers['authentication']) == False:
+         response['message'] = "Invalid token."
+         response['status_code'] = 403
+         return json.dumps(response)
+
+      if not validAccountT(request.headers['authentication']):
+         response['message'] = 'Account not verified.'
+         response['status_code'] = 401
+         return json.dumps(response) 
+   except MySQLError:
+      response['message'] = 'Internal Server Error.'
+      response['status_code'] = 500
+      return json.dumps(response)
+      
+   if request.method == 'POST':
+      try:
+         hashedpw = getPasswordT(request.headers['authentication'])
+         if hashedpw is None:
+            response['message'] = 'Internal Server Error.'
+            response['status_code'] = 500
+            return json.dumps(response) 
+         hashedpw = hashedpw.encode('utf-8')
+
+         if not validAccountT(request.headers['authentication']):
+            response['message'] = 'Account not verified.'
+            response['status_code'] = 401
+            return json.dumps(response) 
+
+         if hashedpw == bcrypt.hashpw(request.form['password'].encode('utf-8'), hashedpw):
+            newPass = bcrypt.hashpw(request.form['newPassword'].encode('utf-8'), bcrypt.gensalt())
+
+            cur.execute("""\
+               UPDATE
+                  Users AS U
+                  INNER JOIN Tokens AS T ON U.userId = T.user
+               SET
+                  U.username = %s,
+                  U.email = %s,
+                  U.phone = %s,
+                  U.password = %s
+               WHERE
+                  T.token = %s""",
+               (request.form['username'], request.form['email'],
+               request.form['phone'], newPass, request.headers['authentication'],)
+            )
+            db.commit()
+         else:
+            response['message'] = 'Invalid password.'
+            response['status_code'] = 401
+            return json.dumps(response) 
+
+         response['message'] = 'OK.'
+         response['status_code'] = 200
+         return json.dumps(response)
+      except IntegrityError:
+         response['message'] = 'Username or email already taken.'
+         response['status_code'] = 400
+         return json.dumps(response)
+      except MySQLError as e:
+         response['message'] = 'Internal Server Error.'
+         response['status_code'] = 500
+         return json.dumps(response)
+   elif request.method == 'GET':
+      try:
+         cur.execute("""\
+            SELECT
+               U.username,
+               U.email,
+               U.phone
+            FROM
+               Tokens AS T
+               INNER JOIN Users AS U ON T.user = U.userId
+            WHERE
+               T.token = %s
+               AND U.deleted = FALSE""", (request.headers['authentication'],)
+         )
+      except MySQLError:
+         response['message'] = 'Internal Server Error.'
+         response['status_code'] = 500
+         return json.dumps(response)
+
+      row = cur.fetchone()
+      if row is None:
+         return json.dumps({})
+
+      data['username'] = row[0]
+      data['email'] = row[1]
+      data['phone'] = row[2]
+
+      # Clear any excess data. 
+      cur.fetchall()
+
+   db.commit()
+   return json.dumps(data)
 
 @app.route("/posts/matched/")
 def getMatchedPosts():
@@ -350,9 +532,14 @@ def getMatchedPosts():
    
    try:
       if validateToken(request.headers['authentication']) == False:
-         response['message'] = "Bad token."
+         response['message'] = "Invalid token."
          response['status_code'] = 403
          return json.dumps(response)
+
+      if not validAccountT(request.headers['authentication']):
+         response['message'] = 'Account not verified.'
+         response['status_code'] = 401
+         return json.dumps(response) 
 
       cur.execute("""\
          SELECT
@@ -412,9 +599,14 @@ def getUserPosts():
 
    try:
       if validateToken(request.headers['authentication']) == False:
-         response['message'] = "Bad token."
+         response['message'] = "Invalid token."
          response['status_code'] = 403
          return json.dumps(response)
+
+      if not validAccountT(request.headers['authentication']):
+         response['message'] = 'Account not verified.'
+         response['status_code'] = 401
+         return json.dumps(response) 
 
       cur.execute("""\
          SELECT
@@ -461,9 +653,14 @@ def getUserHelpedPosts():
 
    try:
       if validateToken(request.headers['authentication']) == False:
-         response['message'] = "Bad token."
+         response['message'] = "Invalid token."
          response['status_code'] = 403
          return json.dumps(response)
+
+      if not validAccountT(request.headers['authentication']):
+         response['message'] = 'Account not verified.'
+         response['status_code'] = 401
+         return json.dumps(response) 
 
       cur.execute("""\
          SELECT
@@ -513,9 +710,14 @@ def getUserHelpingPosts():
 
    try:
       if validateToken(request.headers['authentication']) == False:
-         response['message'] = "Bad token."
+         response['message'] = "Invalid token."
          response['status_code'] = 403
          return json.dumps(response)
+
+      if not validAccountT(request.headers['authentication']):
+         response['message'] = 'Account not verified.'
+         response['status_code'] = 401
+         return json.dumps(response) 
 
       cur.execute("""\
          SELECT
@@ -702,7 +904,7 @@ def PostMessages(postId):
 
    try:
       if validateToken(request.headers['authentication']) == False:
-         response['message'] = "Bad token."
+         response['message'] = "Invalid token."
          response['status_code'] = 403
          return json.dumps(response)
 
@@ -719,6 +921,11 @@ def PostMessages(postId):
                PM.post = %s
          )""", (request.headers['authentication'], postId)
       )
+      col = cur.fetchone()
+      if col[0] == 0:
+         response['message'] = 'Forbidden'
+         response['status_code'] = 403
+         return json.dumps(response)
 
       cur.execute("""\
          SELECT
