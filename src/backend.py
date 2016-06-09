@@ -506,7 +506,6 @@ def getUserHelpedPosts():
 
    return json.dumps(data)
 
-# Any way to optimize?
 @app.route("/posts/helping/")
 def getUserHelpingPosts():
    data = []
