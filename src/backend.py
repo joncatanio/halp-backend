@@ -224,12 +224,10 @@ def register():
       addToken(request.form['username'], token)
    except IntegrityError:
       response['message'] = 'Duplicate token.'
-      response['status_code'] = 500
-      return json.dumps(response)
+      return json.dumps(response), 500
    except MySQLError:
       response['message'] = 'Internal Server Error.'
-      response['status_code'] = 500
-      return json.dumps(response)
+      return json.dumps(response), 500
   
    try:
       sendEmailVerification(request.form['email'], request.form['firstName'] + ' ' +
@@ -871,7 +869,7 @@ def getClasses(schoolId):
             WHERE
                C.classId = %s
                AND C.deleted = FALSE
-               AND CN.unlisted = FALSE""", (row[0],)
+               AND CN.unlisted = FALSE""", [row[0]]
          )
       except MySQLError:
          response['message'] = 'Internal Server Error.'

@@ -95,18 +95,11 @@ INSERT INTO ClassNames VALUES
    (3, 'CSC 357', 2, 'Systems Programming', 0)
 ;
 
-INSERT INTO Genders VALUES
-   (0, 'Decline to State'),
-   (1, 'M'),
-   (2, 'F'),
-   (9, 'Other')
-;
-
 -- Password for joncatanio & kendog is 'password' unhashed on clientside.
 INSERT INTO Users VALUES
-   (NULL, 'Jon', 'Catanio', 'joncatanio', 'fake@fake.com', '5303566442', '1995-06-16', 'TA for 357 and other courses!', 1, '$2b$12$gOBCUl821jzRqInQXsvqrOMoRoUc/aP2ewJL84RQrpAT8ZDlyDa3G', 1, 2, '4', 1, '2016-06-03 15:28:22', 1, 0),
-   (NULL, 'Test', 'User', 'testman', 'test@test.com', '0000000000', '1995-08-31', 'Need halp!', 2, 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', 2, 41, '1', 0, '2016-06-03 15:31:53', 1, 0),
-   (NULL, 'Kendall', 'Gassner', 'kendog', 'kendog@test.com', '0000000000', '1996-01-15', 'Bi-yooo!', 2, '$2b$12$gOBCUl821jzRqInQXsvqrOMoRoUc/aP2ewJL84RQrpAT8ZDlyDa3G', 1, 2, '4', 1, '2016-06-04 15:26:22', 1, 0)
+   (NULL, 'Jon', 'Catanio', 'joncatanio', 'fake@fake.com', '5303566442', '1995-06-16', 'TA for 357 and other courses!', 'M', '$2b$12$gOBCUl821jzRqInQXsvqrOMoRoUc/aP2ewJL84RQrpAT8ZDlyDa3G', 1, 2, '4', 1, '2016-06-03 15:28:22', 1, 0),
+   (NULL, 'Test', 'User', 'testman', 'test@test.com', '0000000000', '1995-08-31', 'Need halp!', 'F', 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', 2, 41, '1', 0, '2016-06-03 15:31:53', 1, 0),
+   (NULL, 'Kendall', 'Gassner', 'kendog', 'kendog@test.com', '0000000000', '1996-01-15', 'Bi-yooo!', 'F', '$2b$12$gOBCUl821jzRqInQXsvqrOMoRoUc/aP2ewJL84RQrpAT8ZDlyDa3G', 1, 2, '4', 1, '2016-06-04 15:26:22', 1, 0)
 ;
 
 INSERT INTO Tutors VALUES

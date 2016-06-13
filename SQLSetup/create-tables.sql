@@ -16,7 +16,7 @@ CREATE TABLE Classes (
    classId INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
    school  INT UNSIGNED REFERENCES Schools(schoolId),
    info    VARCHAR(1024),
-   deleted BOOLEAN
+   deleted BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE TABLE Majors (
@@ -32,39 +32,34 @@ CREATE TABLE ClassNames (
    abbreviation VARCHAR(16),
    major        INT UNSIGNED REFERENCES Majors(majorId),
    name         VARCHAR(128),
-   unlisted     BOOLEAN
-);
-
-CREATE TABLE Genders (
-   genderId    TINYINT UNSIGNED PRIMARY KEY,
-   description VARCHAR(32)
+   unlisted     BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE TABLE Users (
    userId          INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
    firstName       VARCHAR(32),
    lastName        VARCHAR(32),
-   username        VARCHAR(32) UNIQUE,
-   email           VARCHAR(128) UNIQUE,
+   username        VARCHAR(32) NOT NULL UNIQUE,
+   email           VARCHAR(128) NOT NULL UNIQUE,
    phone           VARCHAR(16),
    dateOfBirth     DATE,
    bio             VARCHAR(128),
-   gender          TINYINT UNSIGNED REFERENCES Genders(genderId),
-   password        CHAR(60),
+   gender          ENUM('Decline to State', 'M', 'F', 'Other') DEFAULT 'Decline to State',
+   password        CHAR(60) NOT NULL,
    school          INT UNSIGNED REFERENCES Schools(schoolId),
    major           INT UNSIGNED REFERENCES Majors(majorId),
-   year            ENUM('1', '2', '3', '4', '5', 'Post-Graduate', 'Graduate'),
-   verifiedTutor   BOOLEAN,
+   year            ENUM('1', '2', '3', '4', '5', '6+', 'Post-Graduate', 'Graduate'),
+   verifiedTutor   BOOLEAN NOT NULL DEFAULT FALSE,
    joinDate        DATETIME,
-   verifiedAccount BOOLEAN,
-   deleted         BOOLEAN
+   verifiedAccount BOOLEAN NOT NULL DEFAULT FALSE,
+   deleted         BOOLEAN NOT NULL DEFAULT FALSE 
 );
 
 CREATE TABLE Tutors (
    `user`   INT UNSIGNED REFERENCES Users(userId),
    class    INT UNSIGNED REFERENCES Classes(classId),
    grade    ENUM('W', 'Fail', 'Pass', 'NC', 'CR', 'F', 'D-', 'D', 'D+', 'C-', 'C', 'C+', 'B-', 'B', 'B+', 'A-', 'A', 'A+'), 
-   unlisted BOOLEAN
+   unlisted BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE TABLE Posts (
@@ -74,9 +69,9 @@ CREATE TABLE Posts (
    bounty   VARCHAR(8),
    class    INT UNSIGNED REFERENCES Classes(classId),
    postDate DATETIME,
-   resolved BOOLEAN,
+   resolved BOOLEAN NOT NULL DEFAULT FALSE,
    tutor    INT UNSIGNED REFERENCES Users(userId),
-   deleted  BOOLEAN
+   deleted  BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE TABLE Messages (
@@ -95,7 +90,7 @@ CREATE TABLE Tokens (
    `user`  INT UNSIGNED REFERENCES Users(userId),
    token   CHAR(64) UNIQUE,
    expire  DATETIME,
-   revoked BOOLEAN
+   revoked BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE INDEX TokenIndex ON Tokens(token, `user`);
