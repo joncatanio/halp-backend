@@ -16,7 +16,7 @@ def PostMessages(postId):
    response = {}
 
    try:
-      if validateToken(request.headers['authentication']) == False:
+      if validateToken(request.headers['Authorization']) == False:
          response['message'] = "Invalid token."
          return json.dumps(response), 403
 
@@ -31,7 +31,7 @@ def PostMessages(postId):
                INNER JOIN Tokens AS T ON U.userId = T.user
             WHERE
                PM.post = %s
-         )""", (request.headers['authentication'], postId)
+         )""", (request.headers['Authorization'], postId)
       )
       col = cur.fetchone()
       if col[0] == 0:

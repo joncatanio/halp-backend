@@ -18,11 +18,11 @@ def profile():
    response = {}
 
    try:
-      if validateToken(request.headers['authentication']) == False:
+      if validateToken(request.headers['Authorization']) == False:
          response['message'] = "Invalid token."
          return json.dumps(response), 403
 
-      if not validAccountT(request.headers['authentication']):
+      if not validAccountT(request.headers['Authorization']):
          response['message'] = 'Account not verified.'
          return json.dumps(response), 401 
    except MySQLError:
@@ -50,7 +50,7 @@ def profile():
             request.form['dateOfBirth'], request.form['bio'],
             request.form['gender'], request.form['school'],
             request.form['major'], request.form['year'],
-            request.headers['authentication'],)
+            request.headers['Authorization'],)
          )
          db.commit()
          
@@ -85,7 +85,7 @@ def profile():
                INNER JOIN Majors AS M ON U.major = M.majorId
             WHERE
                T.token = %s
-               AND U.deleted = FALSE""", (request.headers['authentication'],)
+               AND U.deleted = FALSE""", (request.headers['Authorization'],)
          )
       except MySQLError:
          response['message'] = 'Internal Server Error.'
@@ -122,11 +122,11 @@ def account():
    response = {}
 
    try:
-      if validateToken(request.headers['authentication']) == False:
+      if validateToken(request.headers['Authorization']) == False:
          response['message'] = "Invalid token."
          return json.dumps(response), 403
 
-      if not validAccountT(request.headers['authentication']):
+      if not validAccountT(request.headers['Authorization']):
          response['message'] = 'Account not verified.'
          return json.dumps(response), 401 
    except MySQLError:
@@ -135,13 +135,13 @@ def account():
       
    if request.method == 'POST':
       try:
-         hashedpw = getPasswordT(request.headers['authentication'])
+         hashedpw = getPasswordT(request.headers['Authorization'])
          if hashedpw is None:
             response['message'] = 'Internal Server Error.'
             return json.dumps(response), 500 
          hashedpw = hashedpw.encode('utf-8')
 
-         if not validAccountT(request.headers['authentication']):
+         if not validAccountT(request.headers['Authorization']):
             response['message'] = 'Account not verified.'
             return json.dumps(response), 401 
 
@@ -160,7 +160,7 @@ def account():
                WHERE
                   T.token = %s""",
                (request.form['username'], request.form['email'],
-               request.form['phone'], newPass, request.headers['authentication'],)
+               request.form['phone'], newPass, request.headers['Authorization'],)
             )
             db.commit()
          else:
@@ -187,7 +187,7 @@ def account():
                INNER JOIN Users AS U ON T.user = U.userId
             WHERE
                T.token = %s
-               AND U.deleted = FALSE""", (request.headers['authentication'],)
+               AND U.deleted = FALSE""", (request.headers['Authorization'],)
          )
       except MySQLError:
          response['message'] = 'Internal Server Error.'

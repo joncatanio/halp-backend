@@ -17,12 +17,12 @@ def getUserPosts():
    response = {}
 
    try:
-      if validateToken(request.headers['authentication']) == False:
+      if validateToken(request.headers['Authorization']) == False:
          response['message'] = "Invalid token."
          response['status_code'] = 403
          return json.dumps(response)
 
-      if not validAccountT(request.headers['authentication']):
+      if not validAccountT(request.headers['Authorization']):
          response['message'] = 'Account not verified.'
          response['status_code'] = 401
          return json.dumps(response) 
@@ -41,7 +41,7 @@ def getUserPosts():
          WHERE
             T.token = %s
             AND P.deleted <> 1
-            AND P.resolved <> 1""", (request.headers['authentication'],)
+            AND P.resolved <> 1""", (request.headers['Authorization'],)
       );
       db.commit()
    except MySQLError:
@@ -71,12 +71,12 @@ def getMatchedPosts():
    response = {}
    
    try:
-      if validateToken(request.headers['authentication']) == False:
+      if validateToken(request.headers['Authorization']) == False:
          response['message'] = "Invalid token."
          response['status_code'] = 403
          return json.dumps(response)
 
-      if not validAccountT(request.headers['authentication']):
+      if not validAccountT(request.headers['Authorization']):
          response['message'] = 'Account not verified.'
          response['status_code'] = 401
          return json.dumps(response) 
@@ -109,7 +109,7 @@ def getMatchedPosts():
             AND P.resolved = FALSE
             AND P.deleted = FALSE
             AND (P.tutor IS NULL OR P.tutor = 0)""",
-      (request.headers['authentication'], request.headers['authentication'],));
+      (request.headers['Authorization'], request.headers['Authorization'],));
       db.commit()
    except MySQLError:
       response['message'] = 'Internal Server Error.'
@@ -138,12 +138,12 @@ def getUserHelpedPosts():
    response = {}
 
    try:
-      if validateToken(request.headers['authentication']) == False:
+      if validateToken(request.headers['Authorization']) == False:
          response['message'] = "Invalid token."
          response['status_code'] = 403
          return json.dumps(response)
 
-      if not validAccountT(request.headers['authentication']):
+      if not validAccountT(request.headers['Authorization']):
          response['message'] = 'Account not verified.'
          response['status_code'] = 401
          return json.dumps(response) 
@@ -165,7 +165,7 @@ def getUserHelpedPosts():
             T.token = %s
             AND P.user <> P.tutor
             AND P.resolved = TRUE
-            AND P.deleted = FALSE""", (request.headers['authentication'],)
+            AND P.deleted = FALSE""", (request.headers['Authorization'],)
       );
       db.commit()
    except MySQLError:
@@ -195,12 +195,12 @@ def getUserHelpingPosts():
    response = {}
 
    try:
-      if validateToken(request.headers['authentication']) == False:
+      if validateToken(request.headers['Authorization']) == False:
          response['message'] = "Invalid token."
          response['status_code'] = 403
          return json.dumps(response)
 
-      if not validAccountT(request.headers['authentication']):
+      if not validAccountT(request.headers['Authorization']):
          response['message'] = 'Account not verified.'
          response['status_code'] = 401
          return json.dumps(response) 
@@ -222,7 +222,7 @@ def getUserHelpingPosts():
             T.token = %s
             AND P.user <> P.tutor
             AND P.resolved = FALSE
-            AND P.deleted = FALSE""", (request.headers['authentication'],)
+            AND P.deleted = FALSE""", (request.headers['Authorization'],)
       );
       db.commit()
    except MySQLError:
